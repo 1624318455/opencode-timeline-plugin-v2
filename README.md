@@ -1,5 +1,11 @@
 # opencode-timeline-plugin-v2
 
+插件截图：
+
+![timeline sidebar](docs/screenshot.png)
+
+
+
 OpenCode V2 终端侧边栏的会话历史时间线。
 
 - 仅支持 V2（目标 `opencode@^2`），由 V1 包 `@memef1f1y/opencode-timeline-plugin` 移植而来，V1 包不受影响，可继续在 V1 环境使用。
