@@ -1,57 +1,59 @@
 # opencode-timeline-plugin-v2
 
-Conversation history node viewer for the **OpenCode V2** TUI (sidebar timeline).
+OpenCode V2 终端侧边栏的会话历史时间线。
 
-- V2-only port of `@memef1f1y/opencode-timeline-plugin` (V1).
-- The V1 package is untouched and keeps working for V1 users; this package targets `opencode@^2`.
-- Plugin id stays `timeline.viewer`; jump memory moved from V1 `kv` to V2 `ctx.storage`
-  (fresh namespace, V1 memory is not carried over).
+- 仅支持 V2（目标 `opencode@^2`），由 V1 包 `@memef1f1y/opencode-timeline-plugin` 移植而来，V1 包不受影响，可继续在 V1 环境使用。
+- 插件 id 仍为 `timeline.viewer`；跳转记忆从 V1 的 `kv` 改为 V2 的 `ctx.storage`（新的命名空间，V1 的记忆不会带过来）。
 
-## What it does
+## 功能
 
-Sidebar block listing the session's user messages (newest on top, 30-char summaries,
-`HH:MM` timestamps). Mouse only: click a row to jump the transcript to that message,
-click the header to collapse/expand, click `⤓ 回到底部` to scroll back to the bottom.
-No keyboard shortcuts are registered, so the input box is never affected.
+侧边栏区块，按新到老列出本会话的用户消息（30 字摘要 + `HH:MM` 时间戳）。
 
-History is fetched from the server (`message.list` with `type: "user"`, newest-first
-paging), so the panel shows all user messages up to `maxItems` immediately — it does
-not depend on how far the main transcript has been scrolled (the native `/timeline`
-and the TUI's local message window only see recently loaded messages).
+- 纯鼠标操作：点行跳转主视图到该消息，点标题栏折叠/展开，点“回到底部”滚回最新处。
+- 不注册任何快捷键，不会干扰输入框。
+- 历史直接从服务端拉取（`message.list` 按 `type: "user"` 最新优先分页），挂载即全量显示，不依赖主视图滚到哪里（原生 `/timeline` 与 TUI 本地消息窗口都只能看到已加载的最近消息）。
 
-Rendering model: the V2 host does not schedule frames for plugin-owned reactive
-updates, so pushing updates (`requestRender`, store writes) leaves the panel frozen
-at its mount-time values. Instead, the entry re-creates the slot claim whenever the
-content signature changes — a fresh mount always reads fresh values. Unsubscribe and
-re-subscribe happen in the same tick (one frame, no visible flicker), and a signature
-guard keeps it convergent (mount → fetch → one remount → steady).
+已知限制：主视图只渲染已加载窗口，老消息在主视图中没有渲染节点时点行无法跳转，会弹出提示指引先上滚 transcript 加载后再点；窗口内的消息点按即跳。
 
- known issue during development: each hot reload re-runs `setup` and adds a
-claim while the previous generation's claim may stay orphaned, so the panel can
-appear duplicated while iterating — restart the TUI once for a single instance.
-In steady use (no file changes) remounts reuse live handles and stay single.
+渲染模型：V2 宿主不会为插件自有响应式更新排帧，推式刷新（`requestRender`、store 写入）会让面板冻结在挂载瞬间的值。因此入口在内容签名变化时重建 slot claim，用一次新鲜挂载代替推式刷新；同 tick 内先摘后建，合并为一帧，签名守卫保证收敛（挂载 → 拉取 → 重挂一次 → 稳定）。
 
-## Install (local path)
+## 安装（npm，推荐）
 
-In `~/.config/opencode/cli.json`:
+```sh
+opencode plugin add @memef1f1y/opencode-timeline-plugin-v2
+```
+
+或写 `~/.config/opencode/cli.json`：
 
 ```json
 {
   "plugins": [
     {
-      "package": "D:/Work/ForAI/opencode-timeline-plugin-v2/src/tui.tsx",
+      "package": "@memef1f1y/opencode-timeline-plugin-v2",
       "options": { "maxItems": 50 }
     }
   ]
 }
 ```
 
-Options: `maxItems` (default 50, max user messages shown), `debug` (default false,
-shows a `dbg …` snapshot line for troubleshooting).
+## 安装（本地路径）
 
-Restart the TUI. The block appears at the end of the sidebar as `Timeline N`.
+```json
+{
+  "plugins": [
+    {
+      "package": "/path/to/opencode-timeline-plugin-v2",
+      "options": { "maxItems": 50 }
+    }
+  ]
+}
+```
 
-## Publish layout
+参数：`maxItems`（默认 50，最多显示的用户消息数），`debug`（默认 false，打开后显示一行 `dbg …` 快照便于排查）。
+
+重启 TUI，侧边栏末尾出现 `Timeline N` 即生效。
+
+## 包结构
 
 ```json
 {
@@ -62,19 +64,13 @@ Restart the TUI. The block appears at the end of the sidebar as `Timeline N`.
 }
 ```
 
-`./tui` is the CLI entry (auto-loaded); `.` is the minimal server entry required
-beside it. No build step — OpenCode loads the TypeScript sources directly.
+`./tui` 是 CLI 入口（自动加载），`.` 是与之并存的最小服务端入口。无需构建，OpenCode 直接加载 TypeScript 源码。
 
-## Dev
+## 开发
 
 ```sh
 npm install
 npm run typecheck
 ```
 
-Port notes: V1 `api.state.session.messages()` → `ctx.data.session.message.list()`
-(V2 messages carry inline `text`, no parts lookup needed); V1 `api.event.on` →
-`ctx.data.listen` + trailing throttle + `message.sync()`; V1 `slots.register({
-sidebar_content })` → `ctx.ui.slot({ append: "sidebar.content" })`; V1 `api.kv` →
-`ctx.storage.store`. Keyboard navigation from V1 was intentionally dropped
-(it hijacked the input box); interaction is mouse-only.
+移植对照：V1 `api.state.session.messages()` → `ctx.data.session.message.list()`（V2 消息内联 `text`，无需二次查 parts）；V1 `api.event.on` → `ctx.data.listen` + trailing 合并 + `message.sync()`；V1 `slots.register({ sidebar_content })` → `ctx.ui.slot({ append: "sidebar.content" })`；V1 `api.kv` → `ctx.storage.store`。V1 的键盘导航有意舍弃（会劫持输入框），本包只保留鼠标交互。
